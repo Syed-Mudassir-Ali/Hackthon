@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safety Equipment Detection System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-hard-hat"></i>
+                <h1>Safety Equipment Detector</h1>
+            </div>
+            <div class="model-info">
+                <span class="badge"><i class="fas fa-robot"></i> YOLOv8m</span>
+                <span class="badge"><i class="fas fa-chart-line"></i> mAP: </span>
+                <span class="badge"><i class="fas fa-object-group"></i> 7 Classes</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Panel - Upload -->
+            <div class="upload-panel">
+                <div class="upload-options">
+                    <div class="option-card active" id="single-tab">
+                        <i class="fas fa-file-image"></i>
+                        <h3>Single Image</h3>
+                        <p>Upload one image at a time</p>
+                    </div>
+                    <div class="option-card" id="batch-tab">
+                        <i class="fas fa-folder"></i>
+                        <h3>Batch Upload</h3>
+                        <p>Upload multiple images</p>
+                    </div>
+                </div>
+
+                <!-- Single Upload -->
+                <div class="upload-section active" id="single-upload">
+                    <div class="upload-area" id="single-dropzone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <h3>Drag & Drop Single Image</h3>
+                        <p>or click to browse (JPG, PNG, JPEG)</p>
+                        <input type="file" id="single-file" accept="image/*" hidden>
+                        <button class="btn-select" onclick="document.getElementById('single-file').click()">
+                            Select Image
+                        </button>
+                    </div>
+                    
+                    <div class="settings">
+                        <div class="setting-item">
+                            <label for="confidence">
+                                <i class="fas fa-bullseye"></i> Confidence Threshold
+                                <span id="confidence-value">0.25</span>
+                            </label>
+                            <input type="range" id="confidence" min="0.1" max="0.9" step="0.05" value="0.25">
+                            <div class="slider-labels">
+                                <span>Low (0.1)</span>
+                                <span>Medium (0.5)</span>
+                                <span>High (0.9)</span>
+                            </div>
+                        </div>
+                        
+                        <button class="btn-detect" id="detect-single">
+                            <i class="fas fa-search"></i> Detect Equipment
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Batch Upload -->
+                <div class="upload-section" id="batch-upload">
+                    <div class="upload-area" id="batch-dropzone">
+                        <i class="fas fa-folder-open"></i>
+                        <h3>Drag & Drop Folder or Multiple Images</h3>
+                        <p>Supports multiple files selection</p>
+                        <input type="file" id="batch-files" accept="image/*" multiple hidden>
+                        <button class="btn-select" onclick="document.getElementById('batch-files').click()">
+                            Select Images
+                        </button>
+                    </div>
+                    
+                    <div class="file-list" id="file-list">
+                        <!-- Files will appear here -->
+                    </div>
+                    
+                    <div class="settings">
+                        <button class="btn-detect" id="detect-batch">
+                            <i class="fas fa-tasks"></i> Process All Images
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Results -->
+            <div class="results-panel">
+                <div class="results-header">
+                    <h2><i class="fas fa-chart-bar"></i> Detection Results</h2>
+                    <button class="btn-clear" id="clear-results">
+                        <i class="fas fa-trash"></i> Clear All
+                    </button>
+                </div>
+                
+                <!-- Loading -->
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Analyzing images...</p>
+                </div>
+
+                <!-- Single Image Results -->
+                <div class="single-results" id="single-results">
+                    <div class="result-card">
+                        <div class="image-comparison">
+                            <div class="image-container">
+                                <h4>Original Image</h4>
+                                <img id="original-img" src="" alt="Original">
+                            </div>
+                            <div class="image-container">
+                                <h4>Detected Objects</h4>
+                                <img id="detected-img" src="" alt="Detected">
+                            </div>
+                        </div>
+                        
+                        <div class="detection-stats">
+                            <h3><i class="fas fa-info-circle"></i> Detection Summary</h3>
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <div class="stat-value" id="total-detections">0</div>
+                                    <div class="stat-label">Total Objects</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value" id="avg-confidence">0%</div>
+                                    <div class="stat-label">Avg Confidence</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value" id="processing-time">0s</div>
+                                    <div class="stat-label">Processing Time</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="detections-list">
+                            <h3><i class="fas fa-list"></i> Detected Objects</h3>
+                            <div class="table-container">
+                                <table id="detections-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Class</th>
+                                            <th>Confidence</th>
+                                            <th>Bounding Box</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Rows will be added here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Batch Results -->
+                <div class="batch-results" id="batch-results">
+                    <div class="batch-summary">
+                        <h3><i class="fas fa-chart-pie"></i> Batch Summary</h3>
+                        <div class="summary-stats">
+                            <div class="summary-item">
+                                <div class="summary-value" id="total-images">0</div>
+                                <div class="summary-label">Total Images</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-value" id="total-objects">0</div>
+                                <div class="summary-label">Total Objects</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-value" id="batch-avg">0</div>
+                                <div class="summary-label">Avg/Image</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="batch-details">
+                        <h3><i class="fas fa-images"></i> Image Details</h3>
+                        <div class="images-grid" id="batch-images-grid">
+                            <!-- Batch images will appear here -->
+                        </div>
+                    </div>
+                    
+                    <div class="class-distribution">
+                        <h3><i class="fas fa-chart-bar"></i> Class Distribution</h3>
+                        <canvas id="class-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- API Status -->
+                <div class="api-status" id="api-status">
+                    <i class="fas fa-plug"></i>
+                    <span>API: Connecting...</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="class-legend">
+                <h4><i class="fas fa-palette"></i> Class Colors:</h4>
+                <div class="legend-items">
+                    <div class="legend-item"><span class="color-box" style="background-color: #FF0000;"></span> OxygenTank</div>
+                    <div class="legend-item"><span class="color-box" style="background-color: #00FF00;"></span> NitrogenTank</div>
+                    <div class="legend-item"><span class="color-box" style="background-color: #0000FF;"></span> FirstAidBox</div>
+                    <div class="legend-item"><span class="color-box" style="background-color: #FFFF00;"></span> FireAlarm</div>
+                    <div class="legend-item"><span class="color-box" style="background-color: #FF00FF;"></span> SafetySwitchPanel</div>
+                    <div class="legend-item"><span class="color-box" style="background-color: #00FFFF;"></span> EmergencyPhone</div>
+                    <div class="legend-item"><span class="color-box" style="background-color: #800080;"></span> FireExtinguisher</div>
+                </div>
+            </div>
+            <div class="footer-info">
+                <p>Safety Equipment Detection System | Powered by YOLOv8 | Training </p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
