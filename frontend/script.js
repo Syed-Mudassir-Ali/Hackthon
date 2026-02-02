@@ -295,6 +295,10 @@ function displaySingleResults(result, processingTime) {
 }
 
 // Batch Detection
+/*
+Chunked batch upload: split selected files into safe-size chunks and POST each
+to /predict/batch-chunked. Aggregate responses and display final summary.
+*/
 detectBatchBtn.addEventListener('click', async () => {
     if (!batchFilesInput.files.length) {
         alert('Please select images first!');
@@ -308,41 +312,97 @@ detectBatchBtn.addEventListener('click', async () => {
 
     loading.style.display = 'block';
 
-    const formData = new FormData();
-    Array.from(batchFilesInput.files).forEach(file => {
-        formData.append('files', file);
-    });
-    formData.append('confidence', confidenceSlider.value);
+    const allFiles = Array.from(batchFilesInput.files);
+    const totalFiles = allFiles.length;
 
+    // Chunk settings: keep small to avoid FastAPI form field limits
+    let chunkSize = 50; // default safe value
+    // Allow user to pass a preferred chunk size via a data attribute, else use default
     try {
-        const startTime = Date.now();
-        const response = await fetch(`${API_BASE_URL}/predict/batch`, {
-            method: 'POST',
-            body: formData
-        });
+        const custom = parseInt(batchFilesInput.dataset.chunkSize || '0');
+        if (custom && custom > 0 && custom <= 100) chunkSize = custom;
+    } catch (e) {}
 
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Server error ${response.status}: ${text}`);
-        }
+    const aggregated = {
+        batch_id: `frontend_agg_${Date.now()}`,
+        total_images: 0,
+        total_detections: 0,
+        images: [],
+        errors: []
+    };
 
-        let result;
+    const startTime = Date.now();
+
+    // Sequentially upload chunks to avoid server limits
+    for (let i = 0; i < totalFiles; i += chunkSize) {
+        const chunkFiles = allFiles.slice(i, i + chunkSize);
+        const formData = new FormData();
+        chunkFiles.forEach(f => formData.append('files', f));
+        formData.append('confidence', confidenceSlider.value);
+        formData.append('chunk_size', chunkFiles.length);
+
+        // show progress
+        const chunkNum = Math.floor(i / chunkSize) + 1;
+        const totalChunks = Math.ceil(totalFiles / chunkSize);
         try {
-            result = await response.json();
-        } catch (e) {
-            const raw = await response.clone().text();
-            throw new Error('Invalid JSON response from server: ' + raw);
-        }
+            // Abortable fetch with timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 min
 
-        const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log('predict/batch result:', result);
-        displayBatchResults(result, processingTime);
-    } catch (error) {
-        console.error('Error during batch detection:', error);
-        alert('Error processing images. Details: ' + (error && error.message ? error.message : error));
-    } finally {
-        loading.style.display = 'none';
+            const resp = await fetch(`${API_BASE_URL}/predict/batch-chunked`, {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!resp.ok) {
+                const text = await resp.text();
+                const msg = `Chunk ${chunkNum}/${totalChunks} failed: ${resp.status} - ${text}`;
+                console.error(msg);
+                aggregated.errors.push(msg);
+                // stop further processing
+                break;
+            }
+
+            const json = await resp.json();
+            // Some endpoints return per-chunk 'total_images' and 'images'
+            aggregated.total_images += json.total_images || (json.images && json.images.length) || chunkFiles.length;
+            aggregated.total_detections += json.total_detections || 0;
+            if (Array.isArray(json.images)) {
+                aggregated.images = aggregated.images.concat(json.images);
+            }
+
+            // update UI per chunk
+            apiStatus.innerText = `Processing chunk ${chunkNum}/${totalChunks}... (${aggregated.total_images}/${totalFiles} images processed)`;
+        } catch (err) {
+            const msg = `Chunk ${chunkNum} error: ${err && err.message ? err.message : err}`;
+            console.error(msg);
+            aggregated.errors.push(msg);
+            break;
+        }
     }
+
+    const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    // Hide loading and display aggregated results
+    loading.style.display = 'none';
+
+    if (aggregated.errors.length) {
+        alert('Error processing images. See console or status for details.');
+        console.warn('Aggregated errors:', aggregated.errors);
+    }
+
+    // Build a result object compatible with displayBatchResults
+    const result = {
+        total_images: aggregated.total_images,
+        total_detections: aggregated.total_detections,
+        avg_detections_per_image: aggregated.total_images ? (aggregated.total_detections / aggregated.total_images).toFixed(2) : 0,
+        images: aggregated.images
+    };
+
+    console.log('Aggregated batch result:', result);
+    displayBatchResults(result, processingTime);
 });
 
 function displayBatchResults(result, processingTime) {

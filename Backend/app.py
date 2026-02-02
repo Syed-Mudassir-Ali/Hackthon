@@ -15,12 +15,10 @@ from PIL import Image as PILImage
 
 app = FastAPI(title="Safety Equipment Detection API")
 
-# Increase max request body size to 1GB (for batch uploads)
-# Default is 25MB which is too small for 1400 images
-app.add_middleware(
-    lambda app: app,
-)
-# Set max upload size via uvicorn config (see if __name__ == '__main__' section)
+# Increase FastAPI's default limits for large batch uploads
+# Default is 1000, we increase to support larger chunks
+import uvicorn.config
+uvicorn.config.LIMIT_MAX_FIELDS = 5000  # Allow up to 5000 form fields
 
 # CORS middleware (allow frontend to connect)
 app.add_middleware(
@@ -261,11 +259,17 @@ async def download_file(file_path: str):
 async def predict_batch_chunked(
     files: List[UploadFile] = File(...),
     confidence: float = 0.25,
-    chunk_size: int = 100
+    chunk_size: int = 50
 ):
     """
-    Process images in chunks to avoid request size limits.
-    Processes up to chunk_size (default 100) images at a time.
+    Process images in chunks to avoid request size and field limits.
+    
+    FastAPI has a hard limit of ~1000 form fields per request.
+    Recommend chunk_size of 50 (default) or max 100 for safety.
+    
+    For 1400 images:
+    - chunk_size=50 → 28 requests
+    - chunk_size=100 → 14 requests (max recommended)
     """
     try:
         if not files:
@@ -273,6 +277,13 @@ async def predict_batch_chunked(
         
         if not model:
             raise HTTPException(status_code=400, detail="Model not loaded")
+        
+        # Validate chunk_size
+        if len(files) > 1000:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Too many files in single request ({len(files)}). Maximum is 1000. Please use smaller chunks."
+            )
         
         total_images = len(files)
         total_detections = 0
@@ -379,5 +390,25 @@ async def predict_batch_chunked(
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    # Run Uvicorn server
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Run Uvicorn server with increased request limits for large batch uploads
+    # For 1400 images, recommend using /predict/batch-chunked endpoint
+    import sys
+    
+    # Check if running on Windows
+    if sys.platform == "win32":
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=8000,
+            use_colors=True,
+            # Note: On Windows with PowerShell, use:
+            # uvicorn app:app --host 0.0.0.0 --port 8000 --limit-request-fields 32000 --limit-request-line 8190
+        )
+    else:
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=8000,
+            limit_request_fields=32000,
+            limit_request_line=8190,
+        )

@@ -142,7 +142,7 @@ def test_single_prediction(image_path):
 def test_batch_prediction(image_paths):
     """Test batch image prediction"""
     print("\n" + "="*50)
-    print("5. Testing Batch Prediction")
+    print("5. Testing Batch Prediction (Chunked)")
     print("="*50)
     
     if not image_paths or all(not Path(p).exists() for p in image_paths):
@@ -159,11 +159,14 @@ def test_batch_prediction(image_paths):
         print_info(f"Testing with {len(valid_images)} image(s)")
         
         files = [('files', open(p, 'rb')) for p in valid_images]
-        data = {'confidence': 0.25}
+        data = {'confidence': 0.25, 'chunk_size': 100}
+        
+        # Use batch-chunked endpoint for large batches (recommended for 1400+ images)
         response = requests.post(
-            f"{API_BASE_URL}/predict/batch",
+            f"{API_BASE_URL}/predict/batch-chunked",
             files=files,
-            data=data
+            data=data,
+            timeout=600  # 10 minutes timeout for large batches
         )
         
         # Close all files
@@ -173,14 +176,18 @@ def test_batch_prediction(image_paths):
         if response.status_code == 200:
             result = response.json()
             print_success("Batch prediction successful!")
+            print_info(f"Status: {result.get('status')}")
             print_info(f"Total images: {result.get('total_images')}")
             print_info(f"Total detections: {result.get('total_detections')}")
             print_info(f"Avg detections per image: {result.get('avg_detections_per_image')}")
             return True
         else:
             print_error(f"Batch prediction failed with status: {response.status_code}")
-            print_info(f"Response: {response.text}")
+            print_info(f"Response: {response.text[:500]}")  # Show first 500 chars
             return False
+    except requests.exceptions.Timeout:
+        print_error("Batch prediction timed out - try with fewer images per request")
+        return False
     except Exception as e:
         print_error(f"Batch prediction error: {str(e)}")
         return False
